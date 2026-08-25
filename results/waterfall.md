@@ -15,16 +15,19 @@ time-to-first-token. VAD, ASR and TTS are real measured engines.
 **ASR dominates**, taking more than **70%** of measured hop
 time at p50 in the default configuration (partials on, greedy decoding).
 
-Hops ranked by p50 cost. Ranking is reported rather than percentages
-because a share depends on every other hop; the order does not.
+Measured hops ranked by p50 cost. Ranking is reported rather than
+percentages because a share depends on every other hop; the order does
+not. The simulated hop is excluded from the ranking on purpose: its
+position would reflect the delay configured for it, not a measurement.
 
-| rank | hop | measured or simulated |
-|---|---|---|
-| 1 | asr | measured |
-| 2 | tts | measured |
-| 3 | llm | **SIMULATED** |
-| 4 | vad | measured |
-| 5 | playback | measured |
+| rank | measured hop |
+|---|---|
+| 1 | asr |
+| 2 | tts |
+| 3 | vad |
+| 4 | playback |
+
+The simulated LLM hop is swept separately in section 6.
 
 ASR costs more than TTS and VAD combined. This holds regardless of
 machine speed, because all three scale together with CPU throughput.
@@ -62,7 +65,7 @@ The claim behind `docs/adr/0001-first-chunk-not-total-audio.md`.
 - Piper yields its first chunk well before it finishes the utterance:
   the first chunk is playable within **60%** of total
   synthesis time at p50.
-- Synthesis runs at least **10x faster than
+- Synthesis runs at least **5x faster than
   real time**, so playback of chunk *n* covers synthesis of chunk *n+1*
   and the stream never underruns.
 - Median reply across all turns is over **3 s** of
@@ -98,6 +101,32 @@ turn-taking accuracy trade, not a compute trade.
 Summing hop durations double-counts overlapped work. The budget uses
 a merged critical path so the parts sum to the whole; see
 `critical_path` in `src/voice_loop_latency_budget/tracer.py`.
+
+## 6. Where a real LLM would have to land to matter (SIMULATED)
+
+The LLM hop is a stub, so its measured latency is worth nothing on its
+own. What the stub *is* good for is finding the crossover: how fast
+time-to-first-token would have to be before the LLM stops being the
+thing worth fixing on this loop.
+
+Because ASR runs to completion before the prompt exists, the two hops
+are sequential and the comparison is a straight one against measured
+p50 ASR compute.
+
+| simulated TTFT | which hop to fix first |
+|---|---|
+| 100 ms | ASR |
+| 300 ms | ASR |
+| 600 ms | ASR |
+| 1000 ms | ASR |
+| 2000 ms | ASR |
+
+On this hardware, with partials on, a hosted model would need a TTFT of
+roughly a second before it displaced ASR as the dominant hop. **Turn
+partials off and that flips**: ASR drops far enough that almost any
+network round trip becomes the largest single cost. Which hop to
+optimise is therefore not a fixed answer even for one loop -- it
+depends on a configuration choice made upstream of it.
 
 ## Limitations
 

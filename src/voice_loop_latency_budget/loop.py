@@ -27,7 +27,7 @@ import numpy as np
 from .asr import AsrResult, WhisperAsr
 from .tracer import Trace, Tracer
 from .tts import PiperTts, TtsResult
-from .vad import SileroVad, VadConfig, endpoint_from_probabilities
+from .vad import SAMPLE_RATE, SileroVad, VadConfig, endpoint_from_probabilities
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +152,10 @@ class VoiceLoop:
             raise ValueError("no speech detected in the supplied audio")
 
         # --- ASR ------------------------------------------------------
-        speech = audio[: int(endpoint.speech_end_s * 16_000)]
+        # Trimmed at the endpoint, not the end of the buffer: transcribing the
+        # trailing silence would charge the ASR for audio the VAD already
+        # ruled out, which is a measurement error, not a conservative one.
+        speech = audio[: int(endpoint.speech_end_s * SAMPLE_RATE)]
         with tracer.span("asr"):
             if self.emit_partials:
                 asr_result = self.asr.stream(
