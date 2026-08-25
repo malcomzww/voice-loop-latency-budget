@@ -65,7 +65,6 @@ jobs:
       # What CI can still check is that the generator RUNS -- which catches a
       # broken script, the failure the gate actually exists to catch.
       - name: Results generator still runs
-        working-directory: voice-loop-latency-budget
         run: |
           if [ -f scripts/generate_results.py ]; then
             uv run python scripts/generate_results.py ||               (echo "generate_results.py failed to run" && exit 1)
