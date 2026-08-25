@@ -14,12 +14,17 @@ measured inference.
 Measured hops ranked by p50 cost, default configuration (partials on, greedy
 decoding, `tiny.en`, `en_US-lessac-low`):
 
-| rank | hop | what it costs | measured or simulated |
-|---|---|---|---|
-| 1 | **ASR** | >70% of hop time at p50 | measured |
-| 2 | TTS | single-digit % | measured |
-| 3 | VAD | <1% *compute* — but see below | measured |
-| — | LLM | swept, not measured | **SIMULATED** |
+| rank | hop | measured or simulated |
+|---|---|---|
+| 1 | **ASR** — takes more than 70% of hop time at p50 | measured |
+| 2 | TTS | measured |
+| 3 | VAD — negligible *compute*, but see below | measured |
+| — | LLM — swept across a TTFT range, not measured | **SIMULATED** |
+
+Ranking rather than a percentage for every row, because each hop's share
+depends on every other hop: ASR timing noise moves the denominator under the
+whole table, and the stub LLM's share wandered across a band edge between runs
+while the stub itself never changed. The order is what is stable.
 
 **ASR dominates, and the one optimisation that mattered was turning off
 partial hypotheses: it cuts p50 ASR compute by more than 50%.**
@@ -59,8 +64,9 @@ complete audio in 400 ms, even at identical total duration — because the user'
 clock stops at the first phoneme, not the last. Piper's `synthesize()` is a
 generator that yields one chunk per sentence, so this repo timestamps chunks
 *inside* the generator loop, before concatenation. The measured first chunk
-arrives within 60% of total synthesis time, and synthesis runs at least 5x
-faster than real time, so playback of chunk *n* covers synthesis of chunk
+arrives within 60% of total synthesis time, and synthesis runs several times
+faster than real time (the generated file states the asserted multiple for the
+run that produced it), so playback of chunk *n* covers synthesis of chunk
 *n+1* and the stream never underruns.
 
 That last condition is what makes the decision safe rather than merely
@@ -126,6 +132,13 @@ byte-comparing milliseconds across machines is a gate that fails for reasons
 unrelated to the code. Committed claims are written as bounds the script
 re-checks ("more than 50%") rather than as one run's observation ("78.4%") —
 stable across machines, and a stronger statement.
+
+Bands still move between *bands* on a heavily loaded machine: the real-time
+factor claim lands on 10x when nothing else is running and 5x when three
+measurement runs are competing for the same 24 cores. Both are true; the
+committed file states whichever the run supported, and every prose claim here
+is written to hold at the weaker bound. Run it on an idle machine if you want
+the tighter numbers.
 
 Reproduce: `python scripts/fetch_models.py && python scripts/generate_results.py`
 
