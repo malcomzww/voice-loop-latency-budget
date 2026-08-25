@@ -49,10 +49,19 @@ class SimulatedLlm:
     ttft_s: float = 0.30
     per_token_s: float = 0.01
     tokens: int = 24
+    # Replies cycled through in order, so a sweep speaks varied text rather
+    # than one memorised string. Fixed content: the repo measures timing, not
+    # answer quality.
+    replies: tuple[str, ...] = (
+        "The forecast is mild with a light breeze from the south west. "
+        "Expect clear skies through the afternoon.",
+    )
 
     def __post_init__(self) -> None:
         if self.ttft_s < 0 or self.per_token_s < 0:
             raise ValueError("simulated latencies must not be negative")
+        if not self.replies:
+            raise ValueError("the stub needs at least one reply")
 
     @property
     def simulated(self) -> bool:
@@ -66,12 +75,17 @@ class SimulatedLlm:
     def total_s(self) -> float:
         return self.ttft_s + self.per_token_s * max(0, self.tokens - 1)
 
-    def reply_text(self, _prompt: str) -> str:
-        """A fixed reply. The repo measures timing, not answer quality."""
-        return (
-            "The forecast is mild with a light breeze from the south west. "
-            "Expect clear skies through the afternoon."
-        )
+    def reply_text(self, prompt: str) -> str:
+        """Pick a reply for this prompt. NOT a generated answer.
+
+        Selection is a hash of the prompt rather than a counter, so it stays
+        deterministic across runs and independent of call order -- a repeated
+        sweep must produce the same reply for the same utterance, or the TTS
+        timings would not be comparable between runs.
+        """
+        if len(self.replies) == 1:
+            return self.replies[0]
+        return self.replies[sum(map(ord, prompt)) % len(self.replies)]
 
 
 @dataclass

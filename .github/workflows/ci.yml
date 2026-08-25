@@ -20,22 +20,61 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      - name: Install dependencies
+      # Deliberately WITHOUT --extra speech. The tracer and the budget
+      # arithmetic are pure Python and the engines are imported lazily, so the
+      # suite must stay green without downloading a 60 MB ONNX voice. If a test
+      # ever starts needing a real model, this step is what catches it.
+      - name: Install dependencies (no speech engines)
         run: uv sync --extra dev
 
       - name: Lint
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests scripts
 
       - name: Test
         run: uv run pytest -q
 
+  results-drift:
+    # Regenerating the results needs the real engines and their model weights,
+    # so it is a separate job: a lint or test failure should not be hidden
+    # behind a multi-minute model download.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies (with speech engines)
+        run: uv sync --extra speech --extra dev
+
+      - name: Fetch public models
+        run: uv run python scripts/fetch_models.py
+
       # The portfolio's signature check: every number in the README is
       # generated, so a hand-edited result fails the build rather than
       # silently drifting from the code that produced it.
+      #
+      # This passes across machines only because results/waterfall.md commits
+      # banded claims ("more than 50%") rather than raw milliseconds. The
+      # absolute timings go to results/waterfall-raw.md, which is gitignored.
+      # The script also asserts each claim and exits non-zero if one breaks.
       - name: Verify generated results are current
         run: |
-          if [ -f scripts/generate_results.py ]; then
-            uv run python scripts/generate_results.py
-            git diff --exit-code results/ \
-              || (echo "results/ is stale -- regenerate and commit" && exit 1)
+          uv run python scripts/generate_results.py
+          git diff --exit-code results/ \
+            || (echo "results/ is stale -- regenerate and commit" && exit 1)
+
+      # No collected audio, no trained voice, no speaker data. The test
+      # utterances are synthesised at measurement time, so any audio file
+      # appearing in the repo is a scope violation worth failing the build for.
+      - name: No audio files may be committed
+        run: |
+          found=$(git ls-files '*.wav' '*.mp3' '*.flac' '*.ogg' '*.m4a' '*.onnx')
+          if [ -n "$found" ]; then
+            echo "audio or model artifacts committed:"; echo "$found"; exit 1
           fi
