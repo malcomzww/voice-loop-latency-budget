@@ -213,3 +213,31 @@ def test_first_audio_mark_is_set() -> None:
     r = build_loop().run_turn(audio_of(3.0))
     assert r.trace.first_audio_s is not None
     assert r.trace.first_audio_s > 0
+
+
+def test_perceived_latency_is_hangover_plus_time_to_first_audio() -> None:
+    """Pins the headline metric's composition.
+
+    The hangover is *added* rather than measured, because the loop is fed a
+    complete buffer and never actually waits out the trailing silence. If that
+    ever regressed to being measured, perceived latency would silently drop by
+    the whole hangover and the repo's main number would be wrong.
+    """
+    hangover_s = 0.5
+    r = build_loop(vad_config=VadConfig(hangover_ms=500)).run_turn(audio_of(3.0))
+    assert r.trace.first_audio_s is not None
+    expected = hangover_s + r.trace.first_audio_s
+    assert r.perceived_s == pytest.approx(expected, abs=1e-6)
+
+
+def test_perceived_latency_exceeds_the_hangover_alone() -> None:
+    # Sanity check that the compute hops contribute at all.
+    r = build_loop(vad_config=VadConfig(hangover_ms=500)).run_turn(audio_of(3.0))
+    assert r.perceived_s > 0.5
+
+
+def test_blocking_playback_adds_exactly_the_tts_penalty() -> None:
+    r = build_loop().run_turn(audio_of(3.0))
+    assert r.tts is not None
+    penalty = r.tts.blocking_penalty_s
+    assert r.perceived_blocking_s == pytest.approx(r.perceived_s + penalty, abs=1e-6)

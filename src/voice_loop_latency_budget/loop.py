@@ -189,8 +189,21 @@ class VoiceLoop:
         with tracer.span("playback"):
             pass
 
-        # Perceived latency counts the endpoint wait, because the user is
-        # sitting in silence for it.
+        # Perceived latency = hangover + everything the loop then does before
+        # the first phoneme is audible.
+        #
+        # The timeline this models, from the user's last word:
+        #   [hangover silence] [VAD scoring] [ASR] [LLM stub] [TTS 1st chunk]
+        #
+        # The hangover is added rather than measured because this loop is fed a
+        # complete buffer, not a live stream: it never actually waits out the
+        # silence, so the wait has to be reintroduced from the endpointer's own
+        # decision time or the number would flatter the loop by ~500 ms.
+        #
+        # `first_audio_s` runs from turn start, so it includes VAD compute.
+        # That is deliberate -- it is real work happening while the user waits
+        # -- and it does not double-count the hangover, which is wall-clock
+        # silence the loop never spent.
         endpoint_wait = endpoint.endpoint_s
         perceived = endpoint_wait + first_audio_s
         blocking_extra = tts_result.blocking_penalty_s

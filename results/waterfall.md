@@ -63,11 +63,11 @@ interval tuning removes that -- it only trades interim text for cost.
 The claim behind `docs/adr/0001-first-chunk-not-total-audio.md`.
 
 - Piper yields its first chunk well before it finishes the utterance:
-  the first chunk is playable within **60%** of total
-  synthesis time at p50.
-- Synthesis runs at least **5x faster than
-  real time**, so playback of chunk *n* covers synthesis of chunk *n+1*
-  and the stream never underruns.
+  the first chunk is playable within **60%** of total synthesis
+  time at p50.
+- Synthesis runs at least **10x faster than real time**, so
+  playback of chunk *n* covers synthesis of chunk *n+1* and the stream
+  never underruns.
 - Median reply across all turns is over **3 s** of
   audio. Waiting for all of it before playing delays the first phoneme
   for no audible benefit, because the rest is synthesised faster than
@@ -119,7 +119,7 @@ p50 ASR compute.
 | 300 ms | ASR |
 | 600 ms | ASR |
 | 1000 ms | ASR |
-| 2000 ms | ASR |
+| 2000 ms | comparable -- measure your own |
 
 On this hardware, with partials on, a hosted model would need a TTFT of
 roughly a second before it displaced ASR as the dominant hop. **Turn
