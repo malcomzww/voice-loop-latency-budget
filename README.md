@@ -28,10 +28,10 @@ The reason is architectural. Whisper is an encoder-decoder that consumes a
 window, not a streaming model. Partials are therefore implemented by
 re-transcribing a growing buffer, so every partial is a full forward pass over
 everything said so far — and the last partial costs nearly as much as the final
-transcription it is about to duplicate. Over 80% of ASR compute in the default
-configuration goes on work that the final pass repeats. No amount of interval
-tuning fixes that; a true streaming model (CTC or RNN-T) would, because it
-emits partials from a single pass over each new frame.
+transcription it is about to duplicate. The majority of ASR compute in the
+default configuration goes on work that the final pass repeats. No amount of
+interval tuning fixes that; a true streaming model (CTC or RNN-T) would,
+because it emits partials from a single pass over each new frame.
 
 Two findings that a naive budget gets wrong:
 
@@ -59,7 +59,7 @@ complete audio in 400 ms, even at identical total duration — because the user'
 clock stops at the first phoneme, not the last. Piper's `synthesize()` is a
 generator that yields one chunk per sentence, so this repo timestamps chunks
 *inside* the generator loop, before concatenation. The measured first chunk
-arrives within 60% of total synthesis time, and synthesis runs more than 10x
+arrives within 60% of total synthesis time, and synthesis runs at least 5x
 faster than real time, so playback of chunk *n* covers synthesis of chunk
 *n+1* and the stream never underruns.
 
