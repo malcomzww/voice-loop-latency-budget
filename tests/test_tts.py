@@ -74,7 +74,7 @@ def test_real_time_factor_below_one_means_playback_outruns_synthesis() -> None:
 
 def test_empty_result_has_no_first_chunk() -> None:
     with pytest.raises(ValueError, match="no audio"):
-        TtsResult().first_chunk_s
+        _ = TtsResult().first_chunk_s
 
 
 def test_real_time_factor_of_empty_result_is_infinite() -> None:
