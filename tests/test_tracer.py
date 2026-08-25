@@ -278,6 +278,20 @@ def test_summarise_marks_the_llm_hop_simulated() -> None:
     assert not stats["asr"].simulated
 
 
+def test_summarise_drops_an_unknown_hop_name() -> None:
+    """A misspelled hop is silently absent, so pin the behaviour.
+
+    `summarise` iterates HOPS, so a span recorded as "as r" contributes
+    nothing. That is preferable to it appearing as a stray table row, but it
+    is invisible, which is exactly why it needs a test.
+    """
+    t = Trace()
+    t.add("asr", 0.0, 0.1)
+    t.add("typo_hop", 0.1, 0.5)
+    names = [s.name for s in summarise([t])]
+    assert names == ["asr"]
+
+
 def test_summarise_rejects_no_traces() -> None:
     with pytest.raises(ValueError, match="no traces"):
         summarise([])

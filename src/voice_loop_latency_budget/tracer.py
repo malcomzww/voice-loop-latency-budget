@@ -21,6 +21,7 @@ value should be a measurement that actually happened.
 
 from __future__ import annotations
 
+import math
 import time
 from bisect import insort
 from collections.abc import Iterator
@@ -28,8 +29,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 # Hop names are fixed so the waterfall always renders in loop order rather
-# than in dict-insertion order, and so a typo in a hop name fails loudly in
-# `Trace.waterfall` instead of silently adding a row nobody notices.
+# than in dict-insertion order. `summarise` iterates this tuple, so a hop
+# recorded under a misspelled name is dropped from the table rather than
+# quietly appearing at the bottom of it.
 HOPS: tuple[str, ...] = ("vad", "asr", "llm", "tts", "playback")
 
 # Hops whose timing is produced by a stub rather than by a real engine. This
@@ -140,8 +142,10 @@ def percentile(values: list[float], q: float) -> float:
     ordered = sorted(values)
     if q == 0.0:
         return ordered[0]
-    # ceil(q * n) in integer arithmetic, clamped to the last index.
-    rank = -(-int(q * len(ordered) * 1_000_000) // 1_000_000)
+    # Rank is ceil(q * n), clamped into range: the smallest observed value
+    # with at least q of the sample at or below it. p95 of 20 samples is the
+    # 19th, not the maximum.
+    rank = math.ceil(q * len(ordered))
     return ordered[min(max(rank, 1) - 1, len(ordered) - 1)]
 
 

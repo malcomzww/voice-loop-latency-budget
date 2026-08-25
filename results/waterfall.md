@@ -77,6 +77,14 @@ Streaming the first chunk instead of buffering the utterance is a
 **strict improvement**: identical audio, earlier start, asserted here to
 be a positive saving on every run.
 
+The same reasoning settles the voice-quality choice. The higher-
+quality `medium` voice costs materially more per chunk than `low`,
+so under total-synthesis-time accounting it looks like a straight
+regression. But it still clears real time comfortably -- asserted
+here -- so its first chunk lands early enough that the extra
+quality costs the user almost nothing perceptible. **The two metrics
+give opposite advice on the same measurement.**
+
 ## 4. The VAD costs almost no compute and a lot of latency
 
 The most misleading row in any voice-loop budget. Silero scores a
