@@ -11,3 +11,12 @@ build/
 .env.*
 !.env.example
 .DS_Store
+
+# Model weights: 60 MB+ ONNX voices and CT2 snapshots, fetched by
+# scripts/fetch_models.py. Never committed.
+.models/
+
+# Raw per-turn timings from whichever machine ran the script. Machine-
+# dependent by nature, so committing them makes the CI drift gate fail on a
+# different runner for no useful reason. The portable claims are committed.
+results/waterfall-raw.md

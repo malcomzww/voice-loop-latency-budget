@@ -3,9 +3,18 @@ name = "voice-loop-latency-budget"
 version = "0.1.0"
 description = "A streaming ASR to LLM to TTS loop instrumented end-to-end, answering where the perceived latency actually lives."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "numpy>=1.26",
+]
 
 [project.optional-dependencies]
+# The speech engines are optional on purpose. The tracer, the budget
+# arithmetic and their tests are pure-Python and must stay installable and
+# green on a machine that cannot fetch a 60 MB ONNX voice.
+speech = [
+    "faster-whisper>=1.1",
+    "piper-tts>=1.3",
+]
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [tool.pytest.ini_options]
