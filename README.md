@@ -1,58 +1,164 @@
 # voice-loop-latency-budget
 
-> **Status: work in progress.** Scaffolded, not yet implemented. This README
-> will carry generated numbers once the first results land.
+An instrumented streaming voice loop — VAD → ASR → LLM → TTS → playback — built
+to answer exactly one question: **which hop dominates perceived voice latency,
+and what is the one optimisation that mattered?** The scope is deliberately
+narrow. It measures latency on one machine, in English, with CPU-only public
+models, and it does not measure transcription accuracy, audio quality, or any
+real LLM provider. **The LLM hop is a stub with a synthetic delay — no API key
+was configured and no live model was ever called.** Everything else is real
+measured inference.
 
-A streaming ASR to LLM to TTS loop instrumented end-to-end, answering where the perceived latency actually lives.
+## The waterfall
 
-**This repo answers one question:**
+Measured hops ranked by p50 cost, default configuration (partials on, greedy
+decoding, `tiny.en`, `en_US-lessac-low`):
 
-> Which hop dominates perceived voice latency, and what is the one optimisation that mattered?
+| rank | hop | what it costs | measured or simulated |
+|---|---|---|---|
+| 1 | **ASR** | >70% of hop time at p50 | measured |
+| 2 | TTS | single-digit % | measured |
+| 3 | VAD | <1% *compute* — but see below | measured |
+| — | LLM | swept, not measured | **SIMULATED** |
 
-Everything here serves answering that. Features that do not help answer it are
-out of scope — deliberately.
+**ASR dominates, and the one optimisation that mattered was turning off
+partial hypotheses: it cuts p50 ASR compute by more than 50%.**
 
-> **Scope constraint.** Closest repo to employer territory. English plus at most one public-model second language. NO collected audio, NO trained TTS voice, NO speaker data. Multilingual G2P coverage as written analysis with public references only. If in doubt drop the multilingual section and keep it a pure latency repo.
+The reason is architectural. Whisper is an encoder-decoder that consumes a
+window, not a streaming model. Partials are therefore implemented by
+re-transcribing a growing buffer, so every partial is a full forward pass over
+everything said so far — and the last partial costs nearly as much as the final
+transcription it is about to duplicate. Over 80% of ASR compute in the default
+configuration goes on work that the final pass repeats. No amount of interval
+tuning fixes that; a true streaming model (CTC or RNN-T) would, because it
+emits partials from a single pass over each new frame.
 
-## Why this exists
+Two findings that a naive budget gets wrong:
 
-<!-- 2-4 sentences: what was hard, what this establishes. Written last. -->
+- **The VAD's ~0% compute share is the most misleading number in the table.**
+  Silero scores a 32 ms frame in well under a millisecond, but endpointing is a
+  *waiting* decision, not a computing one: the loop cannot call the ASR until
+  it believes the user stopped, and that belief costs the full hangover in
+  silence. At a 500 ms hangover the VAD adds 500 ms to every turn while
+  consuming almost no CPU. It is a turn-taking accuracy trade, not a compute
+  trade.
+- **Perceived latency is not the sum of the hops.** Streaming overlaps work, so
+  summing span durations double-counts it and yields shares above 100%. The
+  budget merges intervals into a critical path instead.
+
+Full generated tables, including p50/p95 per hop and the simulated-TTFT
+crossover: **[`results/waterfall.md`](results/waterfall.md)**.
+
+## First chunk, not total audio
+
+The judgement call the repo is built on:
+**[`docs/adr/0001-first-chunk-not-total-audio.md`](docs/adr/0001-first-chunk-not-total-audio.md)**.
+
+A TTS that streams its first chunk in 200 ms feels faster than one returning
+complete audio in 400 ms, even at identical total duration — because the user's
+clock stops at the first phoneme, not the last. Piper's `synthesize()` is a
+generator that yields one chunk per sentence, so this repo timestamps chunks
+*inside* the generator loop, before concatenation. The measured first chunk
+arrives within 60% of total synthesis time, and synthesis runs more than 10x
+faster than real time, so playback of chunk *n* covers synthesis of chunk
+*n+1* and the stream never underruns.
+
+That last condition is what makes the decision safe rather than merely
+optimistic, and it is the thing to re-check on different hardware: if the
+real-time factor ever exceeded 1.0, first-chunk latency would become a promise
+the loop could not keep.
 
 ## Quickstart
 
 ```bash
-uv sync --extra dev
+uv sync --extra speech --extra dev
+uv run python scripts/fetch_models.py      # public models into .models/ (gitignored)
+uv run python scripts/generate_results.py  # regenerates results/
 uv run pytest -q
-uv run python scripts/generate_results.py
 ```
 
-## Results
+The test suite needs neither the models nor the `speech` extra: the tracer and
+the budget arithmetic are pure Python, the engines are imported lazily, and the
+loop is tested against fakes. `uv sync --extra dev && uv run pytest -q` is
+green on a machine that cannot fetch a 60 MB ONNX voice.
 
-<!-- Generated by scripts/generate_results.py into results/. Every number
-     carries: date, hardware, model snapshot, seed, reproduce command, and
-     the raw artifact path. No number is typed by hand. -->
+## What is measured and what is not
 
-_No results yet._
+| hop | status | engine |
+|---|---|---|
+| VAD | **measured** | Silero VAD v6 (bundled with `faster-whisper`) |
+| ASR | **measured** | `faster-whisper` `tiny.en`, CTranslate2, int8, CPU, greedy |
+| LLM | **SIMULATED** | synthetic delay; configurable TTFT; **no live call** |
+| TTS | **measured** | Piper `en_US-lessac-low` / `-medium` (VITS, ONNX) |
+| playback | modelled | buffer handoff; no sound card is opened |
 
-## Design decisions
+The LLM stub is not a shortcut around the measurement. The question is *which
+hop dominates*, and answering it needs TTFT to be a knob that can be swept
+rather than one provider's network variance on one afternoon. Section 6 of the
+results uses it that way: it reports how fast a real TTFT would have to be
+before the LLM displaced ASR, and the answer flips depending on whether
+partials are on. It is labelled SIMULATED in every table it appears in, and a
+test asserts it is the only hop that is.
 
-<!-- The judgement artifact for this repo:
-     The waterfall latency breakdown with p50/p95 per hop, plus ADR: first chunk, not total audio.
--->
+## No collected audio
+
+The repo ships **no recorded speech, no trained voice, and no speaker data**.
+The test utterances are synthesised by Piper at measurement time from fixed
+prompt strings, so there is no audio in the repository at all — nothing that
+could identify a person. English only, on public models. Multilingual G2P is
+written analysis with public references and no data:
+[`docs/multilingual-g2p-notes.md`](docs/multilingual-g2p-notes.md).
+
+## Provenance
+
+Every number in this README comes from `scripts/generate_results.py`, which
+writes two files:
+
+- **`results/waterfall.md`** — committed. Only machine-independent claims:
+  which hop dominates, the direction and rough size of each effect, and banded
+  thresholds. The script **asserts each claim and exits non-zero if it
+  breaks**, and CI fails if regenerating produces a diff.
+- **`results/waterfall-raw.md`** — gitignored. Absolute millisecond timings,
+  with date, hardware, model snapshot, seed, and reproduce command.
+
+The split is the point. CPU inference speed is hardware-dependent, so
+byte-comparing milliseconds across machines is a gate that fails for reasons
+unrelated to the code. Committed claims are written as bounds the script
+re-checks ("more than 50%") rather than as one run's observation ("78.4%") —
+stable across machines, and a stronger statement.
+
+Reproduce: `python scripts/fetch_models.py && python scripts/generate_results.py`
 
 ## Limitations
 
-<!-- At least one thing this repo does NOT establish. Written honestly. -->
+What this repo does **not** establish:
+
+- **Nothing about any real LLM's latency.** The LLM hop is simulated. The
+  decomposition around it is real; the hop itself is a delay.
+- **Synthetic speech in, synthetic speech out.** Piper output is unnaturally
+  clean input for a VAD and an ASR. Real microphones bring noise, clipping and
+  far-field reverb that would raise ASR cost and hurt endpointing. **These
+  numbers are a floor, not a forecast.**
+- **Accuracy is not measured at all.** Greedy decoding and `tiny.en` are
+  latency choices with a real, unquantified WER cost. A faster loop that
+  mistranscribes is not a better loop, and this repo cannot tell you which
+  you have.
+- **One machine, CPU only, no GPU.** A GPU changes the ASR/TTS balance and
+  could plausibly move which hop dominates.
+- **No barge-in, no diarization, no multi-turn context.** The user interrupting
+  playback is a real turn-taking cost this budget ignores entirely.
+- **English only.** See the G2P notes for why per-language cost differs and
+  why measuring it properly needs data this repo deliberately does not collect.
 
 ## Concepts covered
 
-- 2D streaming ASR: CTC vs RNN-T vs Whisper-style, partial hypotheses, endpointing
-- 2D VAD, turn detection, barge-in, diarization
-- 2D TTS architectures: autoregressive vs diffusion/flow-matching, neural codecs, vocoders
-- 2D voice cloning, speaker conditioning, prosody control
-- 2D TTS evaluation: MOS, intelligibility, WER-via-ASR, speaker similarity
-- 2D voice loop latency budget: ASR partial to LLM TTFT to TTS first chunk (TRY-L)
-- …and 1 more (see `docs/inventory-coverage.md`)
+See [`docs/inventory-coverage.md`](docs/inventory-coverage.md).
+
+- Streaming ASR: Whisper-style vs CTC/RNN-T, partial hypotheses, endpointing
+- VAD, turn detection, barge-in (discussed), diarization (out of scope)
+- TTS architectures: VITS, neural vocoders, chunked streaming synthesis
+- Voice loop latency budget: ASR partials → LLM TTFT → TTS first chunk
+- Backpressure and partial responses in a streaming pipeline
 
 ## License
 
