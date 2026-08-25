@@ -276,6 +276,20 @@ def write_committed(data: dict) -> None:
     add("Streaming the first chunk instead of buffering the utterance is a")
     add("**strict improvement**: identical audio, earlier start, asserted here to")
     add("be a positive saving on every run.\n")
+    # The voice comparison is the sharpest illustration of why the metric
+    # choice matters, and the ordering is portable even though the timings
+    # are not: `medium` is a bigger network than `low` on any hardware.
+    if len(data["voices"]) > 1:
+        low, med = data["voices"][0], data["voices"][1]
+        assert med["total_p50"] > low["total_p50"], "medium voice is not slower than low"
+        assert med["rtf_p50"] < 1.0, "medium voice no longer clears real time"
+        add("The same reasoning settles the voice-quality choice. The higher-")
+        add("quality `medium` voice costs materially more per chunk than `low`,")
+        add("so under total-synthesis-time accounting it looks like a straight")
+        add("regression. But it still clears real time comfortably -- asserted")
+        add("here -- so its first chunk lands early enough that the extra")
+        add("quality costs the user almost nothing perceptible. **The two metrics")
+        add("give opposite advice on the same measurement.**\n")
 
     add("## 4. The VAD costs almost no compute and a lot of latency\n")
     add("The most misleading row in any voice-loop budget. Silero scores a")

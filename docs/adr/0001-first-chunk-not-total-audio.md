@@ -65,11 +65,14 @@ simply not buffering. A team optimising the wrong metric will spend real
 effort making the tail faster and ship no perceptible improvement.
 
 **It also reframes the model-size choice.** Comparing the two public voices,
-the higher-quality `medium` voice costs more per chunk than `low`, but both
-yield their first chunk in a fraction of the audio duration. The relevant
-question is not "which voice is faster" but "does the slower voice still clear
-real time" — and if it does, the quality is close to free. Total-time
-accounting obscures that; first-chunk accounting makes it obvious.
+`medium` costs roughly twice what `low` does per chunk — and still yields its
+first chunk in a small fraction of the reply's audio duration, clearing real
+time by a wide margin (see the TTS table in `results/waterfall-raw.md`). Under
+total-synthesis-time accounting the higher-quality voice looks like a 2x
+regression. Under first-chunk accounting the right question is instead "does
+the slower voice still clear real time?", and while it does, the extra quality
+costs the user almost nothing they can perceive. The two metrics give opposite
+advice on the same measurement.
 
 ## Consequences
 
