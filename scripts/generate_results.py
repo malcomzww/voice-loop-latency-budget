@@ -276,20 +276,28 @@ def write_committed(data: dict) -> None:
     add("Streaming the first chunk instead of buffering the utterance is a")
     add("**strict improvement**: identical audio, earlier start, asserted here to")
     add("be a positive saving on every run.\n")
-    # The voice comparison is the sharpest illustration of why the metric
-    # choice matters, and the ordering is portable even though the timings
-    # are not: `medium` is a bigger network than `low` on any hardware.
+    # What is portable about the voice comparison is only that BOTH voices
+    # stream and both clear real time. An earlier version of this script also
+    # asserted that `medium` costs more than `low`, and that assertion failed:
+    # measured over three trials the ordering flipped 2-1 in favour of `low`
+    # being the slower one. The two ONNX files are the same size and differ
+    # mainly in sample rate, so there is no reliable cost gap to claim -- the
+    # differences are CPU-contention noise. Recorded here because it is a
+    # claim the repo tried to make and could not support.
     if len(data["voices"]) > 1:
-        low, med = data["voices"][0], data["voices"][1]
-        assert med["total_p50"] > low["total_p50"], "medium voice is not slower than low"
-        assert med["rtf_p50"] < 1.0, "medium voice no longer clears real time"
-        add("The same reasoning settles the voice-quality choice. The higher-")
-        add("quality `medium` voice costs materially more per chunk than `low`,")
-        add("so under total-synthesis-time accounting it looks like a straight")
-        add("regression. But it still clears real time comfortably -- asserted")
-        add("here -- so its first chunk lands early enough that the extra")
-        add("quality costs the user almost nothing perceptible. **The two metrics")
-        add("give opposite advice on the same measurement.**\n")
+        for row in data["voices"]:
+            assert row["chunks_p50"] > 1, f"{row['name']} did not stream"
+            assert row["rtf_p50"] < 1.0, f"{row['name']} no longer clears real time"
+        add("Both public voices stream (more than one chunk) and both clear real")
+        add("time comfortably -- asserted here for each. What this file does *not*")
+        add("claim is that the higher-quality `medium` voice costs more: measured")
+        add("across repeated trials the ordering between the two flips, since the")
+        add("two ONNX files are the same size and differ mainly in sample rate.")
+        add("The apparent gap is CPU-contention noise, not model cost.\n")
+        add("That is still the useful conclusion for the metric question. When")
+        add("both candidates clear real time, first-chunk accounting says the")
+        add("quality difference is close to free, and picking between them is a")
+        add("quality judgement rather than a latency one.\n")
 
     add("## 4. The VAD costs almost no compute and a lot of latency\n")
     add("The most misleading row in any voice-loop budget. Silero scores a")

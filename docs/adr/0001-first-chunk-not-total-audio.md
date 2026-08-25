@@ -64,15 +64,22 @@ chunk earlier — sentence-level chunking, a smaller first-sentence model, or
 simply not buffering. A team optimising the wrong metric will spend real
 effort making the tail faster and ship no perceptible improvement.
 
-**It also reframes the model-size choice.** Comparing the two public voices,
-`medium` costs roughly twice what `low` does per chunk — and still yields its
-first chunk in a small fraction of the reply's audio duration, clearing real
-time by a wide margin (see the TTS table in `results/waterfall-raw.md`). Under
-total-synthesis-time accounting the higher-quality voice looks like a 2x
-regression. Under first-chunk accounting the right question is instead "does
-the slower voice still clear real time?", and while it does, the extra quality
-costs the user almost nothing they can perceive. The two metrics give opposite
-advice on the same measurement.
+**It also reframes the model-quality choice.** Both public voices stream, and
+both clear real time by a wide margin (see the TTS table in
+`results/waterfall-raw.md`). That is the whole answer under first-chunk
+accounting: when every candidate's first chunk lands early and synthesis keeps
+ahead of playback, the choice between them stops being a latency decision at
+all and becomes a quality judgement.
+
+An earlier draft of this ADR claimed the higher-quality `medium` voice costs
+roughly twice what `low` does, and used that as the illustration. **That claim
+did not survive being asserted.** Across repeated trials the ordering between
+the two voices flipped — sometimes `low` measured slower — which makes sense
+once you notice the two ONNX files are the same size and differ mainly in
+sample rate. The apparent gap was CPU-contention noise. It is recorded here
+because a results script that asserts its claims is what caught it, and
+because the corrected version makes the same point more cleanly: the metric's
+job is to tell you when latency has stopped being the deciding factor.
 
 ## Consequences
 

@@ -77,13 +77,17 @@ Streaming the first chunk instead of buffering the utterance is a
 **strict improvement**: identical audio, earlier start, asserted here to
 be a positive saving on every run.
 
-The same reasoning settles the voice-quality choice. The higher-
-quality `medium` voice costs materially more per chunk than `low`,
-so under total-synthesis-time accounting it looks like a straight
-regression. But it still clears real time comfortably -- asserted
-here -- so its first chunk lands early enough that the extra
-quality costs the user almost nothing perceptible. **The two metrics
-give opposite advice on the same measurement.**
+Both public voices stream (more than one chunk) and both clear real
+time comfortably -- asserted here for each. What this file does *not*
+claim is that the higher-quality `medium` voice costs more: measured
+across repeated trials the ordering between the two flips, since the
+two ONNX files are the same size and differ mainly in sample rate.
+The apparent gap is CPU-contention noise, not model cost.
+
+That is still the useful conclusion for the metric question. When
+both candidates clear real time, first-chunk accounting says the
+quality difference is close to free, and picking between them is a
+quality judgement rather than a latency one.
 
 ## 4. The VAD costs almost no compute and a lot of latency
 
@@ -127,7 +131,7 @@ p50 ASR compute.
 | 300 ms | ASR |
 | 600 ms | ASR |
 | 1000 ms | ASR |
-| 2000 ms | comparable -- measure your own |
+| 2000 ms | ASR |
 
 On this hardware, with partials on, a hosted model would need a TTFT of
 roughly a second before it displaced ASR as the dominant hop. **Turn
